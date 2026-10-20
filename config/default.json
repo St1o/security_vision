@@ -1,0 +1,59 @@
+{
+  "object_name": "Строительная площадка (учебный прототип)",
+  "camera_name": "Камера 1",
+  "source": "data/videos/site.mp4",
+  "loop": true,
+
+  "model": {
+    "path": "models/ppe.pt",
+    "imgsz": 640,
+    "conf": 0.35,
+    "device": "cpu",
+    "class_map": {
+      "person":    ["person", "worker"],
+      "helmet":    ["hardhat", "hard hat", "helmet", "safety helmet"],
+      "vest":      ["safety vest", "vest", "reflective vest"],
+      "no_helmet": ["no-hardhat", "no hardhat", "no helmet", "no_helmet", "head"],
+      "no_vest":   ["no-safety vest", "no safety vest", "no vest", "no_vest"]
+    }
+  },
+
+  "zones": [
+    {
+      "name": "Зона А",
+      "polygon": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+      "required": ["helmet", "vest"]
+    }
+  ],
+
+  "rules": {
+    "confirm_seconds": 3.0,
+    "clear_seconds": 2.0,
+    "min_person_height_frac": 0.12,
+    "dedup_seconds": 15.0,
+    "dedup_distance_frac": 0.08,
+    "use_negative_classes": true
+  },
+
+  "tracker": {
+    "iou_threshold": 0.3,
+    "max_missed": 8,
+    "min_hits": 2
+  },
+
+  "shifts": [
+    {"number": 1, "name": "Смена 1", "start": "00:00", "end": "08:00"},
+    {"number": 2, "name": "Смена 2", "start": "08:00", "end": "16:00"},
+    {"number": 3, "name": "Смена 3", "start": "16:00", "end": "24:00"}
+  ],
+
+  "storage": {
+    "db": "data/violations.db",
+    "snapshots": "data/snapshots",
+    "exports": "exports"
+  },
+
+  "report": {
+    "legal_basis": "Правила по охране труда при строительстве, реконструкции и ремонте (приказ Минтруда России от 11.12.2020 № 883н); Правила обеспечения работников СИЗ (приказ Минтруда России от 29.10.2021 № 766н)"
+  }
+}
