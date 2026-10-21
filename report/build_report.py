@@ -1,6 +1,9 @@
 """Сборка отчёта по практике в формате .docx по образцу (рамка и штамп берутся из файла-шаблона).
 
-    python report/build_report.py --template Полуян.docx --out report/Отчёт.docx [--start-page 8]
+    python report/build_report.py --template Полуян.docx --out report/Отчёт.docx [--toc-page 7]
+
+Перед оглавлением в готовом отчёте идут листы титула, задания, графика, дневника, отзыва и ведомости
+(6 листов), поэтому оглавление имеет номер 7, а основной текст начинается с 8-й страницы.
 
 Тексты глав лежат в report/content/*.md, источники — в report/sources.py, рисунки — в report/figures/
 и report/inputs/ (сюда кладут скриншоты и файлы из ppe_result.zip). Если рисунка нет, вместо него
@@ -17,6 +20,7 @@ import tempfile
 from pathlib import Path
 
 from docx import Document
+from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -26,6 +30,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 from sources import SOURCES  # noqa: E402
+from stamp import StampData, build_toc_footer  # noqa: E402
 
 FONT = "Times New Roman"
 BODY_SZ = 28          # 14 пт
@@ -265,10 +270,11 @@ def normalize(doc):
 # ---------------------------------------------------------------- сборщик ---------------------
 
 class Builder:
-    def __init__(self, template: Path, designation: str, start_page: int, toc: dict | None):
+    def __init__(self, template: Path, designation: str, start_page: int, toc: dict | None, total_sheets: int = 0):
         self.doc = Document(str(template))
         self.designation = designation
-        self.start_page = start_page
+        self.start_page = start_page      # номер страницы оглавления
+        self.total_sheets = total_sheets
         self.toc_pages = toc or {}
         self.styles = {s.name.lower(): s.style_id for s in self.doc.styles}
         self.headings: list[tuple[int, str]] = []   # (уровень, текст) для оглавления
@@ -439,7 +445,7 @@ class Builder:
         for idx, (lvl, text) in enumerate(entries):
             par = self.doc.add_paragraph()
             style = self.styles.get("toc 1" if lvl == 1 else "toc 2")
-            fmt_par(par, style_id=style, jc="left", first=0, left=0 if lvl == 1 else 567, line=360)
+            fmt_par(par, style_id=style, jc="left", first=0, left=0 if lvl == 1 else 567, line=276)
             ppr(par).append(_el("w:tabs"))
             ppr(par).find(qn("w:tabs")).append(_el("w:tab", w_val="right", w_leader="dot", w_pos=9500))
             if first:  # начало поля оглавления
@@ -461,14 +467,32 @@ class Builder:
                 r = par.add_run()
                 r._r.append(_el("w:fldChar", w_fldCharType="end"))
 
+    def end_toc_section(self):
+        """Оглавление — отдельный раздел с большим штампом; основной текст — с малым штампом (как в образце)."""
+        doc = self.doc
+        doc.add_section(WD_SECTION.NEW_PAGE)
+        sect_toc, sect_body = doc.sections[0]._sectPr, doc.sections[1]._sectPr
+        ref = sect_toc.find(qn("w:footerReference"))      # малый штамп переходит к основному тексту
+        sect_toc.remove(ref)
+        sect_body.insert(0, ref)
+        for old in sect_body.findall(qn("w:pgNumType")):  # нумерация продолжается
+            sect_body.remove(old)
+        mar = sect_toc.find(qn("w:pgMar"))
+        mar.set(qn("w:bottom"), "2650")                   # место под штамп высотой 40 мм
+        source = doc.sections[1].footer
+        target = doc.sections[0].footer
+        target.is_linked_to_previous = False
+        build_toc_footer(source, target, StampData(designation=self.designation, sheets_total=self.total_sheets,
+                                                   first_page=self.start_page))
 
-def build(template: Path, out: Path, start_page: int, toc_pages: dict | None, designation: str):
+
+def build(template: Path, out: Path, start_page: int, toc_pages: dict | None, designation: str, total_sheets: int = 0):
     files = sorted((HERE / "content").glob("*.md"))
     blocks = parse_content(files)
     figs, tabs, cites = number_things(blocks)
     res = lambda s: resolve(s, figs, tabs, cites)  # noqa: E731
 
-    b = Builder(template, designation, start_page, toc_pages)
+    b = Builder(template, designation, start_page, toc_pages, total_sheets)
     b.toc_entries = [(1, "Введение")]
     for blk in blocks:
         if blk.kind == "h1":
@@ -483,6 +507,7 @@ def build(template: Path, out: Path, start_page: int, toc_pages: dict | None, de
     b.toc_entries.insert(idx_app, (1, sources_title))
 
     b.toc()
+    b.end_toc_section()
     sources_done = False
     for blk in blocks:
         if blk.kind == "h0" and blk.text.startswith("Приложение") and not sources_done:
@@ -528,13 +553,15 @@ def build(template: Path, out: Path, start_page: int, toc_pages: dict | None, de
     return b
 
 
-def locate_pages(docx_path: Path, entries, start_page: int) -> dict:
+def locate_pages(docx_path: Path, entries, start_page: int) -> tuple[dict, int]:
     """Конвертирует в PDF через LibreOffice и находит страницу каждого заголовка (для оглавления)."""
     tmp = Path(tempfile.mkdtemp())
     subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(tmp), str(docx_path)],
                    check=True, capture_output=True, timeout=300)
     pdf = tmp / (docx_path.stem + ".pdf")
     pages = subprocess.run(["pdftotext", "-layout", str(pdf), "-"], capture_output=True, text=True).stdout.split("\f")
+    if pages and not pages[-1].strip():
+        pages.pop()                      # pdftotext добавляет пустой фрагмент после последнего \f
     result, cursor = {}, 1  # страница 0 — оглавление
     norm = lambda s: re.sub(r"\s+", " ", s).strip()  # noqa: E731
     for lvl, text in entries:
@@ -545,22 +572,23 @@ def locate_pages(docx_path: Path, entries, start_page: int) -> dict:
                 result[text] = start_page + pi
                 cursor = pi
                 break
-    return result
+    return result, start_page - 1 + len(pages)
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--template", required=True, type=Path)
     ap.add_argument("--out", required=True, type=Path)
-    ap.add_argument("--start-page", type=int, default=8)
+    ap.add_argument("--toc-page", type=int, default=7, help="номер страницы оглавления (перед ним 6 листов: титул ... ведомость)")
     ap.add_argument("--designation", default=DESIGNATION)
     ap.add_argument("--no-toc-pages", action="store_true", help="не рассчитывать номера страниц оглавления")
     a = ap.parse_args()
 
-    first = build(a.template, a.out, a.start_page, None, a.designation)
+    first = build(a.template, a.out, a.toc_page, None, a.designation)
     if not a.no_toc_pages:
-        pages = locate_pages(a.out, first.toc_entries, a.start_page)
-        build(a.template, a.out, a.start_page, pages, a.designation)
+        pages, total = locate_pages(a.out, first.toc_entries, a.toc_page)
+        build(a.template, a.out, a.toc_page, pages, a.designation, total)
         missing = [t for _, t in first.toc_entries if t not in pages]
         print("страниц оглавления найдено:", len(pages), "из", len(first.toc_entries), "| не найдено:", missing)
+        print("всего листов отчёта (с титулом и ведомостью):", total)
     print("готово:", a.out)

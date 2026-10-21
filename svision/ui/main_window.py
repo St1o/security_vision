@@ -10,7 +10,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QTabWidget
 
 from ..config import AppConfig
-from ..detector import YoloDetector
+from ..detector import YoloDetector, prefer_openvino
 from ..pipeline import Detector
 from ..report import build_act
 from ..shifts import shift_for
@@ -59,7 +59,9 @@ class MainWindow(QMainWindow):
 
     def _yolo_factory(self) -> Detector:
         m = self.cfg.model
-        return YoloDetector(m.path, m.imgsz, m.conf, m.device, m.class_map, self.cfg.required_roles)
+        path = prefer_openvino(m.path) if m.auto_openvino else m.path
+        print(f"Модель: {path}")
+        return YoloDetector(path, m.imgsz, m.conf, m.device, m.class_map, self.cfg.required_roles)
 
     def _source_text(self) -> str:
         return f"камера {self.source}" if isinstance(self.source, int) else Path(self.source).name or str(self.source)

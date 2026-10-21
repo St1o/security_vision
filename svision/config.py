@@ -23,6 +23,7 @@ class ModelConfig:
     conf: float
     device: str
     class_map: dict[str, list[str]]
+    auto_openvino: bool = True
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,7 @@ def load_config(path: str | Path, root: Path | None = None) -> AppConfig:
                 conf=float(model_raw.get("conf", 0.35)),
                 device=str(model_raw.get("device", "cpu")),
                 class_map={k: list(v) for k, v in model_raw.get("class_map", {}).items()},
+                auto_openvino=bool(model_raw.get("auto_openvino", True)),
             ),
             zones=_parse_zones(raw.get("zones", [])),
             rules=RulesParams(**raw.get("rules", {})),

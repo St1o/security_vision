@@ -43,6 +43,15 @@ def check_roles(roles: Mapping[int, str], required: set[str], model_names: Mappi
         )
 
 
+def prefer_openvino(path: Path) -> Path:
+    """Если рядом с весами .pt лежит экспортированная папка <имя>_openvino_model, берёт её: на CPU Intel она быстрее."""
+    path = Path(path)
+    exported = path.with_name(path.stem + "_openvino_model")
+    if path.suffix == ".pt" and exported.is_dir() and any(exported.glob("*.xml")):
+        return exported
+    return path
+
+
 class YoloDetector:
     def __init__(self, path: Path, imgsz: int, conf: float, device: str,
                  class_map: Mapping[str, Sequence[str]], required_roles: set[str]):

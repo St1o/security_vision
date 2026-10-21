@@ -90,3 +90,17 @@ def test_act_is_built(tmp_path):
     assert "АКТ № 20261020-2" in text and "ТЕСТОВЫЕ" in text
     table = Document(str(out)).tables[0]
     assert table.rows[1].cells[3].text == "Нет каски"
+
+
+def test_openvino_export_is_preferred_when_present(tmp_path):
+    from svision.detector import prefer_openvino
+
+    weights = tmp_path / "ppe.pt"
+    weights.write_bytes(b"x")
+    assert prefer_openvino(weights) == weights            # экспорта нет: остаются веса .pt
+    exported = tmp_path / "ppe_openvino_model"
+    exported.mkdir()
+    assert prefer_openvino(weights) == weights            # пустая папка не считается экспортом
+    (exported / "ppe.xml").write_text("<net/>")
+    assert prefer_openvino(weights) == exported
+    assert prefer_openvino(exported) == exported          # путь к папке задан явно: не меняется
