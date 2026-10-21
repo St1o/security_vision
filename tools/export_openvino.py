@@ -1,4 +1,4 @@
-"""Конвертирует веса .pt в формат OpenVINO: на процессорах Intel работает в 2-3 раза быстрее.
+"""Конвертирует веса .pt в формат OpenVINO. На части процессоров Intel он быстрее, на других нет: сравните tools/benchmark.py.
 
     python tools/export_openvino.py                 # models/ppe.pt -> models/ppe_openvino_model/
     python tools/export_openvino.py models/ppe.pt

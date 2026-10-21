@@ -40,7 +40,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("models", nargs="+", help="пути к весам: .pt или папка *_openvino_model")
     parser.add_argument("--video")
-    parser.add_argument("--frames", type=int, default=60)
+    parser.add_argument("--frames", type=int, default=100)
     parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "default.json"))
     args = parser.parse_args()
 
@@ -50,13 +50,17 @@ def main() -> None:
     for model_path in args.models:
         m = cfg.model
         detector = YoloDetector(Path(model_path), m.imgsz, m.conf, m.device, m.class_map, set())
-        for frame in frames[:3]:  # прогрев
-            detector.detect(frame)
-        start = time.perf_counter()
+        for i in range(max(10, len(frames) // 6)):  # прогрев: загрузка и первая компиляция модели не должны попасть в замер
+            detector.detect(frames[i % len(frames)])
+        times = []
         for frame in frames:
+            start = time.perf_counter()
             detector.detect(frame)
-        per_frame = (time.perf_counter() - start) / len(frames)
-        print(f"{Path(model_path).name:<40}{per_frame * 1000:>10.0f}{1 / per_frame:>9.1f}")
+            times.append(time.perf_counter() - start)
+        times.sort()
+        median = times[len(times) // 2]  # медиана устойчива к единичным задержкам
+        mean = sum(times) / len(times)
+        print(f"{Path(model_path).name:<40}{median * 1000:>10.0f}{1 / median:>9.1f}   (медиана; среднее {mean * 1000:.0f} мс)")
 
 
 if __name__ == "__main__":

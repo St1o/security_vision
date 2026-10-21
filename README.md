@@ -49,12 +49,12 @@
 3. Скачайте `ppe_result.zip`. `best.pt` положите в `models/ppe.pt`.
 4. В архиве также лежат графики и `metrics.json`: это материал для раздела отчёта о качестве.
 
-**Ускорение на Intel (рекомендуется):** процессор Intel быстрее работает с форматом OpenVINO. В моём замере на Intel-процессоре в 2.9 раза быстрее, чем PyTorch (на вашем ноутбуке цифры будут ниже, замерьте).
+**OpenVINO (необязательно, проверяйте замером).** Формат OpenVINO на части процессоров Intel заметно быстрее PyTorch, на других нет. В среде разработки (Intel Xeon, 4 ядра) он был быстрее в 2,9 раза, а на ноутбуке с Intel Core i3-1215U по первому замеру оказался медленнее, поэтому по умолчанию используется `models/ppe.pt`. Чтобы сравнить на своём компьютере (закройте программу и тяжёлые приложения):
 ```
 python tools/export_openvino.py
 python tools/benchmark.py models/ppe.pt models/ppe_openvino_model
 ```
-Затем в `config/default.json` поставьте `"path": "models/ppe_openvino_model"`.
+Если OpenVINO быстрее, в `config/default.json` поставьте `"path": "models/ppe_openvino_model"`.
 
 ## Запуск
 

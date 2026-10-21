@@ -148,8 +148,8 @@ def simulate(present_chance: float, seed: int, seconds: float = 10.0):
 
 def fig_window():
     fig, axes = plt.subplots(2, 1, figsize=(9, 5.2), sharex=True)
-    cases = [("а) Работник в каске: модель находит каску лишь в ~75% кадров", 0.75, 3),
-             ("б) Работник без каски: модель в ~10% кадров ошибочно «находит» каску", 0.10, 11)]
+    cases = [("а) Работник в каске: модель находит каску лишь в ~75% кадров", 0.75, 0),
+             ("б) Работник без каски: модель в ~17% кадров ошибочно «находит» каску", 0.17, 1)]
     for ax, (title, chance, seed) in zip(axes, cases):
         ts, seen, confirmed = simulate(chance, seed)
         ax.scatter(ts, seen, s=14, color=DARK)
@@ -169,7 +169,7 @@ def fig_window():
     fig.tight_layout()
     fig.savefig(OUT / "fig_window.png", dpi=200)
     plt.close(fig)
-    return simulate(0.75, 3)[2], simulate(0.10, 11)[2]
+    return simulate(0.75, 0)[2], simulate(0.17, 1)[2]
 
 
 def fig_architecture():
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     fig_timeline()
     fig_algorithm()
     fig_regions()
-    print("моделирование: подтверждение у работника в каске =", simulate(0.75, 3)[2], "| у работника без каски =", simulate(0.10, 11)[2])
+    print("моделирование: подтверждение у работника в каске =", simulate(0.75, 0)[2], "| у работника без каски =", simulate(0.17, 1)[2])
     fig_window()
     fig_architecture()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
