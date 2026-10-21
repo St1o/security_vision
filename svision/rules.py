@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Sequence
 
@@ -32,8 +33,10 @@ class Zone:
 
 @dataclass(frozen=True)
 class RulesParams:
-    confirm_seconds: float = 3.0   # сколько секунд подряд нет СИЗ, чтобы зафиксировать нарушение
-    clear_seconds: float = 2.0     # сколько секунд СИЗ должно быть видно, чтобы нарушение считалось устранённым
+    confirm_seconds: float = 3.0   # окно наблюдения: за это время СИЗ должно отсутствовать, чтобы зафиксировать нарушение
+    clear_seconds: float = 2.0     # окно, в котором СИЗ должно быть видно, чтобы нарушение считалось устранённым
+    violation_ratio: float = 0.8   # доля кадров окна confirm_seconds без СИЗ (нейросеть иногда «не видит» каску)
+    resolve_ratio: float = 0.5     # доля кадров окна clear_seconds с СИЗ для признания нарушения устранённым
     min_person_height_frac: float = 0.12  # люди мельче этой доли высоты кадра не оцениваются
     dedup_seconds: float = 15.0    # окно защиты от дублей при смене номера трека
     dedup_distance_frac: float = 0.08     # расстояние (доля диагонали кадра) для той же защиты
@@ -126,12 +129,13 @@ def ppe_present(role: str, person_box: Box, dets: Sequence[Detection], use_negat
 
 class _State:
     """Состояние «человек X не имеет СИЗ Y»."""
-    __slots__ = ("bad_since", "last_bad", "last_seen", "uid", "confirmed_t",
+    __slots__ = ("samples", "started_t", "last_bad", "last_seen", "uid", "confirmed_t",
                  "zone", "box", "track_id", "kind", "reported")
 
     def __init__(self, t: float, track_id: int, kind: str):
-        self.bad_since: float | None = None
-        self.last_bad: float | None = None
+        self.samples: deque[tuple[float, bool]] = deque()  # (время, СИЗ есть) по последним кадрам
+        self.started_t: float | None = None   # когда началось подтверждённое нарушение
+        self.last_bad: float | None = None    # последний кадр без СИЗ
         self.last_seen = t
         self.uid: int | None = None
         self.confirmed_t: float | None = None
@@ -140,6 +144,13 @@ class _State:
         self.track_id = track_id
         self.kind = kind
         self.reported = False
+
+    def window(self, t: float, seconds: float) -> list[tuple[float, bool]]:
+        return [s for s in self.samples if t - s[0] <= seconds]
+
+    def missing_ratio(self, t: float, seconds: float) -> float:
+        win = self.window(t, seconds)
+        return sum(1 for _, ok in win if not ok) / len(win) if win else 0.0
 
 
 class ViolationEngine:
@@ -161,8 +172,8 @@ class ViolationEngine:
         return None
 
     def _close(self, key: tuple[int, str], st: _State, t: float, resolved: list[ResolvedEvent]) -> None:
-        if st.uid is not None and st.bad_since is not None and st.last_bad is not None:
-            resolved.append(ResolvedEvent(st.uid, max(0.0, st.last_bad - st.bad_since)))
+        if st.uid is not None and st.started_t is not None and st.last_bad is not None:
+            resolved.append(ResolvedEvent(st.uid, max(0.0, st.last_bad - st.started_t)))
             self._closed.append((t, st.kind, st.zone, box_center(st.box)))
         self._states.pop(key, None)
 
@@ -208,24 +219,33 @@ class ViolationEngine:
                     st = self._states[key] = _State(t, track_id, kind)
                 st.last_seen, st.zone, st.box = t, zone.name, pbox
 
-                if present:
-                    if st.bad_since is not None and t - (st.last_bad or t) >= p.clear_seconds:
-                        self._close(key, st, t, resolved)
-                    continue
+                st.samples.append((t, present))
+                while st.samples and t - st.samples[0][0] > max(p.confirm_seconds, p.clear_seconds):
+                    st.samples.popleft()
+                if not present:
+                    st.last_bad = t
 
-                if st.bad_since is None:
-                    st.bad_since = t
-                st.last_bad = t
-                if st.uid is None and t - st.bad_since >= p.confirm_seconds:
-                    st.uid = self._next_uid
-                    self._next_uid += 1
-                    st.confirmed_t = t
-                    if not self._is_duplicate(t, kind, zone.name, pbox, diag):
-                        st.reported = True
-                        new.append(ViolationEvent(st.uid, kind, zone.name, track_id, t, st.bad_since, pbox))
+                if st.uid is None:
+                    # нейросеть иногда не видит каску, поэтому решает доля кадров окна, а не один кадр
+                    win = st.window(t, p.confirm_seconds)
+                    if (t - win[0][0] >= 0.9 * p.confirm_seconds
+                            and st.missing_ratio(t, p.confirm_seconds) >= p.violation_ratio):
+                        st.uid = self._next_uid
+                        self._next_uid += 1
+                        st.confirmed_t = t
+                        st.started_t = next(ts for ts, ok in win if not ok)
+                        if not self._is_duplicate(t, kind, zone.name, pbox, diag):
+                            st.reported = True
+                            new.append(ViolationEvent(st.uid, kind, zone.name, track_id, t, st.started_t, pbox))
+                else:
+                    win = st.window(t, p.clear_seconds)
+                    ok_ratio = sum(1 for _, ok in win if ok) / len(win)
+                    if t - win[0][0] >= 0.8 * p.clear_seconds and ok_ratio >= p.resolve_ratio:
+                        self._close(key, st, t, resolved)
 
             missing = [k for (tid, k), s in self._states.items() if tid == track_id and s.uid is not None]
-            warning = any(s.bad_since is not None for (tid, _), s in self._states.items() if tid == track_id)
+            warning = any(s.uid is None and s.missing_ratio(t, p.confirm_seconds) >= 0.5
+                          for (tid, _), s in self._states.items() if tid == track_id)
             state = "violation" if missing else ("warning" if warning else "ok")
             statuses.append(PersonStatus(track_id, pbox, zone.name, ppe, state, missing))
 
@@ -234,7 +254,7 @@ class ViolationEngine:
                 self._close(key, self._states[key], t, resolved)
 
         active = sorted(
-            (ActiveViolation(s.uid, s.kind, s.zone, s.track_id, s.bad_since, s.confirmed_t, s.box)
+            (ActiveViolation(s.uid, s.kind, s.zone, s.track_id, s.started_t, s.confirmed_t, s.box)
              for s in self._states.values() if s.uid is not None),
             key=lambda a: a.started_t,
         )

@@ -29,6 +29,8 @@
   "rules": {
     "confirm_seconds": 3.0,
     "clear_seconds": 2.0,
+    "violation_ratio": 0.8,
+    "resolve_ratio": 0.5,
     "min_person_height_frac": 0.12,
     "dedup_seconds": 15.0,
     "dedup_distance_frac": 0.08,

@@ -55,7 +55,7 @@ def test_missing_helmet_confirmed_after_threshold_once():
     new = [e for r in results for e in r.new]
     assert len(new) == 1
     assert new[0].kind == "no_helmet"
-    assert 3.0 <= new[0].t <= 3.25
+    assert 2.7 <= new[0].t <= 3.0  # окно 3 с, подтверждение после ~90% окна
     assert results[1].persons[0].state == "warning"
     assert results[-1].persons[0].state == "violation"
     assert [a.kind for a in results[-1].active] == ["no_helmet"]
@@ -70,9 +70,36 @@ def test_both_violations_reported():
 
 def test_short_gap_below_threshold_is_not_a_violation():
     engine = ViolationEngine([FULL], RulesParams(confirm_seconds=3.0))
-    results = run(engine, [VEST], frames(0, 2.5)) + run(engine, [HELMET, VEST], frames(2.75, 6))
+    results = run(engine, [VEST], frames(0, 2.0)) + run(engine, [HELMET, VEST], frames(2.25, 6))
     assert not any(r.new for r in results)
     assert results[-1].persons[0].state == "ok"
+
+
+def noisy(engine, present_chance, seconds, seed):
+    """Нейросеть пропускает каску в части кадров: каска «мигает» с заданной вероятностью обнаружения."""
+    import random
+
+    rng = random.Random(seed)
+    results = []
+    for t in frames(0, seconds, 0.1):
+        dets = [VEST] + ([HELMET] if rng.random() < present_chance else [])
+        results.append(engine.update(t, [(1, PERSON)], dets, W, H))
+    return results
+
+
+def test_compliant_person_with_unreliable_detector_is_not_flagged():
+    """Recall каски ~75%: добросовестного работника нельзя записывать в нарушители."""
+    for seed in range(20):
+        results = noisy(ViolationEngine([FULL]), 0.75, 60, seed)
+        assert not any(r.new for r in results), f"ложное нарушение при seed={seed}"
+
+
+def test_real_violator_with_occasional_false_helmet_is_flagged():
+    """Каски нет, но модель в 10% кадров ошибочно «видит» её: нарушение всё равно фиксируется."""
+    for seed in range(20):
+        results = noisy(ViolationEngine([FULL]), 0.10, 10, seed)
+        new = [e for r in results for e in r.new]
+        assert [e.kind for e in new] == ["no_helmet"], f"seed={seed}"
 
 
 def test_flicker_does_not_reset_timer():
