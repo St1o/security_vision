@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QTabWidget
 
 from ..config import AppConfig
@@ -32,7 +33,8 @@ class MainWindow(QMainWindow):
         self.worker: VideoWorker | None = None
 
         self.setWindowTitle("Security Vision — контроль применения СИЗ")
-        self.resize(1380, 820)
+        available = QGuiApplication.primaryScreen().availableGeometry()  # чтобы окно не уходило под панель задач
+        self.resize(min(1380, int(available.width() * 0.92)), min(820, int(available.height() * 0.86)))
 
         self.monitor = MonitorTab()
         self.journal = JournalTab(storage, cfg.shifts)

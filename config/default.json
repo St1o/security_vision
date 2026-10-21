@@ -2,7 +2,7 @@
   "object_name": "Строительная площадка (учебный прототип)",
   "camera_name": "Камера 1",
   "source": "data/videos/site.mp4",
-  "loop": true,
+  "loop": false,
 
   "model": {
     "path": "models/ppe.pt",
