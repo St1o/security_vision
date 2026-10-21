@@ -6,7 +6,7 @@
 
   "model": {
     "path": "models/ppe.pt",
-    "auto_openvino": true,
+    "auto_openvino": false,
     "imgsz": 640,
     "conf": 0.35,
     "device": "cpu",

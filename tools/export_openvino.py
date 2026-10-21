@@ -1,9 +1,9 @@
-"""Конвертирует веса .pt в формат OpenVINO: на процессорах Intel без видеокарты он быстрее (сравните tools/benchmark.py).
+"""Конвертирует веса .pt в формат OpenVINO. На части процессоров он быстрее, на других нестабилен: сравните tools/benchmark.py (медиану и среднее).
 
     python tools/export_openvino.py                 # models/ppe.pt -> models/ppe_openvino_model/
     python tools/export_openvino.py models/ppe.pt
 
-После этого программа сама использует папку models/ppe_openvino_model (если model.auto_openvino = true в config/default.json).
+Чтобы программа использовала папку models/ppe_openvino_model, поставьте model.auto_openvino = true в config/default.json.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def main() -> None:
 
     result = YOLO(str(source)).export(format="openvino", imgsz=cfg.model.imgsz)
     print("Готово:", result)
-    print("Теперь программа будет использовать эту папку автоматически (model.auto_openvino в config/default.json).")
+    print("Чтобы программа использовала эту папку, поставьте model.auto_openvino = true в config/default.json.")
 
 
 if __name__ == "__main__":

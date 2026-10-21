@@ -64,8 +64,9 @@ class YoloDetector:
 
         self.model = YOLO(str(path))
         self.imgsz, self.conf, self.device = imgsz, conf, device
-        self.roles = build_class_roles(self.model.names, class_map)
-        check_roles(self.roles, required_roles, self.model.names)
+        names = self.model.names  # у экспортированных моделей каждое обращение к names может заново загружать модель
+        self.roles = build_class_roles(names, class_map)
+        check_roles(self.roles, required_roles, names)
 
     def detect(self, frame: np.ndarray) -> list[Detection]:
         result = self.model.predict(frame, imgsz=self.imgsz, conf=self.conf,
