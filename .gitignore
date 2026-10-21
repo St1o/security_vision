@@ -15,3 +15,7 @@ data/snapshots/*
 data/*.db
 exports/*
 !exports/.gitkeep
+
+report/out/
+report/inputs/*
+!report/inputs/.gitkeep
