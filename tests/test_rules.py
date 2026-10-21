@@ -153,6 +153,26 @@ def test_dedup_when_track_id_changes_for_same_place():
     assert sum(len(r.new) for r in second) == 0  # тот же человек под новым номером
 
 
+def _episodes(dedup_seconds):
+    """Каски нет 0–2 с, её «нашли» 2–4 с (нарушение закрылось), потом снова нет: один и тот же человек."""
+    params = RulesParams(confirm_seconds=1.0, clear_seconds=1.0, dedup_seconds=dedup_seconds,
+                         dedup_distance_frac=0.001)  # критерий «рядом» отключён: проверяем только номер человека
+    engine = ViolationEngine([FULL], params)
+    new = []
+    for t in frames(0, 9):
+        dets = [HELMET, VEST] if 2.0 < t <= 4.0 else [VEST]
+        new += engine.update(t, [(1, PERSON)], dets, W, H).new
+    return new
+
+
+def test_same_person_violation_that_flickers_is_recorded_once():
+    assert len(_episodes(dedup_seconds=30.0)) == 1
+
+
+def test_repeat_is_recorded_when_dedup_is_off():
+    assert len(_episodes(dedup_seconds=0.0)) == 2
+
+
 def test_two_people_side_by_side_are_both_reported():
     engine = ViolationEngine([FULL], RulesParams(confirm_seconds=1.0))
     other = (520.0, 300.0, 620.0, 600.0)

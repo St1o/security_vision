@@ -9,7 +9,7 @@ from typing import Callable
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QBuffer, QIODevice, QThread, Signal
 
 from ..config import AppConfig
 from ..pipeline import Detector, FrameAnalysis, Pipeline
@@ -20,8 +20,6 @@ from ..tracking import IoUTracker
 from .overlay import render_frame
 
 MAX_UI_FPS = 20.0
-
-STATE_BGR = {"ok": (67, 160, 46), "warning": (10, 160, 234), "violation": (38, 38, 220), "ignored": (150, 150, 150)}
 
 
 @dataclass
@@ -160,24 +158,16 @@ class VideoWorker(QThread):
 
     def _save_snapshot(self, frame: np.ndarray, analysis: FrameAnalysis, ev: ViolationEvent,
                        ts: datetime) -> str | None:
-        """Кадр с рамками: нарушитель красным, остальные люди своим цветом."""
-        image = frame.copy()
-        thickness = max(2, image.shape[1] // 400)
-        for person in analysis.result.persons:
-            if person.state == "ignored" or person.track_id == ev.track_id:
-                continue
-            x1, y1, x2, y2 = (int(v) for v in person.box)
-            cv2.rectangle(image, (x1, y1), (x2, y2), STATE_BGR[person.state], thickness)
-        x1, y1, x2, y2 = (int(v) for v in ev.box)
-        cv2.rectangle(image, (x1, y1), (x2, y2), STATE_BGR["violation"], thickness + 1)
-
-        ok, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 88])
-        if not ok:
+        """Кадр как в окне мониторинга: у каждого человека подпись «#номер», нарушитель из записи обведён белым."""
+        image = render_frame(frame, analysis, self.cfg.zones, highlight=ev.track_id)
+        buffer = QBuffer()
+        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+        if not image.save(buffer, "JPG", 88):
             return None
         folder = self.cfg.snapshots_dir / f"{ts:%Y-%m-%d}"
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f"{ts:%H%M%S}_{ev.kind}_id{ev.track_id}.jpg"
-        path.write_bytes(buffer.tobytes())  # не cv2.imwrite: он не умеет кириллицу в пути на Windows
+        path.write_bytes(bytes(buffer.data()))  # через байты: пути с кириллицей на Windows безопасны
         try:
             return path.relative_to(self.cfg.root).as_posix()
         except ValueError:

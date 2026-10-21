@@ -39,7 +39,9 @@ def _label(painter: QPainter, text: str, x: float, y: float, color: QColor, font
     painter.drawText(QPointF(x + 5, top + height - metrics.descent() - 2), text)
 
 
-def render_frame(frame: np.ndarray, analysis: FrameAnalysis | None, zones: Sequence[Zone]) -> QImage:
+def render_frame(frame: np.ndarray, analysis: FrameAnalysis | None, zones: Sequence[Zone],
+                 highlight: int | None = None) -> QImage:
+    """highlight: номер человека, которого нужно выделить белой обводкой (для фото в журнале)."""
     image = bgr_to_qimage(frame)
     width, height = image.width(), image.height()
     k = max(width, height) / 1000.0  # масштаб линий и шрифта под размер кадра
@@ -71,6 +73,11 @@ def render_frame(frame: np.ndarray, analysis: FrameAnalysis | None, zones: Seque
         for person in analysis.result.persons:
             x1, y1, x2, y2 = person.box
             color = STATE_COLORS[person.state]
+            if person.track_id == highlight:
+                margin = 4 * k
+                painter.setPen(QPen(QColor(255, 255, 255), max(3.0, 6 * k)))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRect(QRectF(x1 - margin, y1 - margin, x2 - x1 + 2 * margin, y2 - y1 + 2 * margin))
             painter.setPen(QPen(color, max(1.5, (3 if person.state != "ignored" else 1.5) * k)))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(QRectF(x1, y1, x2 - x1, y2 - y1))

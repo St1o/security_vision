@@ -38,7 +38,7 @@ class RulesParams:
     violation_ratio: float = 0.8   # доля кадров окна confirm_seconds без СИЗ (нейросеть иногда «не видит» каску)
     resolve_ratio: float = 0.5     # доля кадров окна clear_seconds с СИЗ для признания нарушения устранённым
     min_person_height_frac: float = 0.12  # люди мельче этой доли высоты кадра не оцениваются
-    dedup_seconds: float = 15.0    # окно защиты от дублей при смене номера трека
+    dedup_seconds: float = 30.0    # окно защиты от повторов одного и того же нарушения
     dedup_distance_frac: float = 0.08     # расстояние (доля диагонали кадра) для той же защиты
     use_negative_classes: bool = True     # учитывать классы модели «нет каски / нет жилета»
 
@@ -158,7 +158,7 @@ class ViolationEngine:
         self.zones = tuple(zones)
         self.params = params or RulesParams()
         self._states: dict[tuple[int, str], _State] = {}
-        self._closed: list[tuple[float, str, str, tuple[float, float]]] = []
+        self._closed: list[tuple[float, str, str, tuple[float, float], int]] = []
         self._next_uid = 1
 
     def reset(self) -> None:
@@ -174,17 +174,19 @@ class ViolationEngine:
     def _close(self, key: tuple[int, str], st: _State, t: float, resolved: list[ResolvedEvent]) -> None:
         if st.uid is not None and st.started_t is not None and st.last_bad is not None:
             resolved.append(ResolvedEvent(st.uid, max(0.0, st.last_bad - st.started_t)))
-            self._closed.append((t, st.kind, st.zone, box_center(st.box)))
+            self._closed.append((t, st.kind, st.zone, box_center(st.box), st.track_id))
         self._states.pop(key, None)
 
-    def _is_duplicate(self, t: float, kind: str, zone: str, box: Box, diag: float) -> bool:
-        """Тот же нарушитель под новым номером трека: рядом недавно закончился такой же эпизод."""
+    def _is_duplicate(self, t: float, kind: str, zone: str, box: Box, diag: float, track_id: int) -> bool:
+        """Тот же нарушитель: недавно закончился такой же эпизод у человека с тем же номером
+        (нарушение «моргнуло») либо рядом (трек потерялся и получил новый номер)."""
         p = self.params
         self._closed = [c for c in self._closed if t - c[0] <= p.dedup_seconds]
         cx, cy = box_center(box)
         return any(
-            k == kind and z == zone and math.hypot(cx - c[0], cy - c[1]) <= p.dedup_distance_frac * diag
-            for _, k, z, c in self._closed
+            k == kind and z == zone
+            and (tid == track_id or math.hypot(cx - c[0], cy - c[1]) <= p.dedup_distance_frac * diag)
+            for _, k, z, c, tid in self._closed
         )
 
     def update(self, t: float, tracks: Sequence[tuple[int, Box]], dets: Sequence[Detection],
@@ -234,7 +236,7 @@ class ViolationEngine:
                         self._next_uid += 1
                         st.confirmed_t = t
                         st.started_t = next(ts for ts, ok in win if not ok)
-                        if not self._is_duplicate(t, kind, zone.name, pbox, diag):
+                        if not self._is_duplicate(t, kind, zone.name, pbox, diag, track_id):
                             st.reported = True
                             new.append(ViolationEvent(st.uid, kind, zone.name, track_id, t, st.started_t, pbox))
                 else:
