@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import time
 from pathlib import Path
@@ -43,6 +44,9 @@ def main() -> None:
     parser.add_argument("--frames", type=int, default=100)
     parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "default.json"))
     args = parser.parse_args()
+
+    from ultralytics.utils import LOGGER  # сообщения о загрузке модели в таблицу замера не нужны
+    LOGGER.setLevel(logging.ERROR)
 
     cfg = load_config(args.config)
     frames = load_frames(args.video, args.frames)
