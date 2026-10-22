@@ -19,3 +19,5 @@ exports/*
 report/out/
 report/inputs/*
 !report/inputs/.gitkeep
+
+article/out/
