@@ -8,8 +8,8 @@
 получены из вторичных источников или по памяти и требуют проверки по первоисточнику.
 """
 D = "дата обращения: 21.10.2026"
-EL = "Текст: электронный"
-PR = "Текст: непосредственный"
+EL = "Текст : электронный"
+PR = "Текст : непосредственный"
 
 SOURCES: dict[str, str] = {
     # --- нормативные акты и стандарты ---
@@ -37,22 +37,22 @@ SOURCES: dict[str, str] = {
     # --- история ---
     "cctv_clarion": f"The History of CCTV // Clarion UK : [сайт]. – URL: https://clarionuk.com/resources/cctv-history/ ({D}). – {EL}.",
     "cctv_wiki": f"Closed-circuit television // Wikipedia. – URL: https://en.wikipedia.org/wiki/Closed-circuit_television ({D}). – {EL}.",
-    "viola": f"Viola P., Jones M. Rapid object detection using a boosted cascade of simple features // Proceedings of the 2001 IEEE Computer Society Conference on Computer Vision and Pattern Recognition. – 2001. – Vol. 1. – P. 511–518. – {PR}.",
-    "dalal": f"Dalal N., Triggs B. Histograms of oriented gradients for human detection // Proceedings of the 2005 IEEE Computer Society Conference on Computer Vision and Pattern Recognition. – 2005. – Vol. 1. – P. 886–893. – {PR}.",
-    "alexnet": f"Krizhevsky A., Sutskever I., Hinton G. E. ImageNet classification with deep convolutional neural networks // Advances in Neural Information Processing Systems. – 2012. – Vol. 25. – P. 1097–1105. – {PR}.",
-    "rcnn": f"Girshick R., Donahue J., Darrell T., Malik J. Rich feature hierarchies for accurate object detection and semantic segmentation // Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. – 2014. – P. 580–587. – {PR}.",
-    "yolo": f"Redmon J., Divvala S., Girshick R., Farhadi A. You Only Look Once: Unified, Real-Time Object Detection // Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. – 2016. – P. 779–788. – URL: https://openaccess.thecvf.com/content_cvpr_2016/html/Redmon_You_Only_Look_CVPR_2016_paper.html ({D}). – {EL}.",
-    "coco": f"Lin T.-Y., Maire M., Belongie S. et al. Microsoft COCO: Common Objects in Context // Computer Vision – ECCV 2014. – 2014. – P. 740–755. – {PR}.",
+    "viola": f"Viola, P. Rapid object detection using a boosted cascade of simple features / P. Viola, M. Jones // Proceedings of the 2001 IEEE Computer Society Conference on Computer Vision and Pattern Recognition. – 2001. – Vol. 1. – P. 511–518. – {PR}.",
+    "dalal": f"Dalal, N. Histograms of oriented gradients for human detection / N. Dalal, B. Triggs // Proceedings of the 2005 IEEE Computer Society Conference on Computer Vision and Pattern Recognition. – 2005. – Vol. 1. – P. 886–893. – {PR}.",
+    "alexnet": f"Krizhevsky, A. ImageNet classification with deep convolutional neural networks / A. Krizhevsky, I. Sutskever, G. E. Hinton // Advances in Neural Information Processing Systems. – 2012. – Vol. 25. – P. 1097–1105. – {PR}.",
+    "rcnn": f"Rich feature hierarchies for accurate object detection and semantic segmentation / R. Girshick [et al.] // Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. – 2014. – P. 580–587. – {PR}.",
+    "yolo": f"You Only Look Once : Unified, Real-Time Object Detection / J. Redmon [et al.] // Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. – 2016. – P. 779–788. – URL: https://openaccess.thecvf.com/content_cvpr_2016/html/Redmon_You_Only_Look_CVPR_2016_paper.html ({D}). – {EL}.",
+    "coco": f"Microsoft COCO : Common Objects in Context / T.-Y. Lin [et al.] // Computer Vision – ECCV 2014. – 2014. – P. 740–755. – {PR}.",
     # CHECK: список авторов приведён по памяти
-    "shrestha": f"Shrestha K., Shrestha P. P., Bajracharya D., Yfantis E. A. Hard-Hat Detection for Construction Safety Visualization // Journal of Construction Engineering. – 2015. – Art. 721380. – DOI: 10.1155/2015/721380. – {EL}.",
-    "fang": f"Fang Q., Li H., Luo X., Ding L., Luo H., Rose T. M., An W. Detecting non-hardhat-use by a deep learning method from far-field surveillance videos // Automation in Construction. – 2018. – Vol. 85. – P. 1–9. – {PR}.",
+    "shrestha": f"Hard-Hat Detection for Construction Safety Visualization / K. Shrestha [et al.] // Journal of Construction Engineering. – 2015. – Art. 721380. – DOI: 10.1155/2015/721380. – {EL}.",
+    "fang": f"Detecting non-hardhat-use by a deep learning method from far-field surveillance videos / Q. Fang [et al.] // Automation in Construction. – 2018. – Vol. 85. – P. 1–9. – {PR}.",
     # CHECK: список авторов приведён по памяти
-    "wu": f"Wu J., Cai N., Chen W., Wang H., Wang G. Automatic detection of hardhats worn by construction personnel: A deep learning approach and benchmark dataset // Automation in Construction. – 2019. – Vol. 106. – Art. 102894. – URL: https://workzonesafety.org/publication/automatic-detection-of-hardhats-worn-by-construction-personnel-a-deep-learning-approach-and-benchmark-dataset ({D}). – {EL}.",
+    "wu": f"Automatic detection of hardhats worn by construction personnel : A deep learning approach and benchmark dataset / J. Wu [et al.] // Automation in Construction. – 2019. – Vol. 106. – Art. 102894. – URL: https://workzonesafety.org/publication/automatic-detection-of-hardhats-worn-by-construction-personnel-a-deep-learning-approach-and-benchmark-dataset ({D}). – {EL}.",
     # CHECK: список авторов приведён по памяти
-    "wang2020": f"Wang L., Xie L., Yang P., Deng Q., Du S., Xu L. Hardhat-Wearing Detection Based on a Lightweight Convolutional Neural Network with Multi-Scale Features and a Top-Down Module // Sensors. – 2020. – Vol. 20, № 7. – Art. 1868. – DOI: 10.3390/s20071868. – URL: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7180748/ ({D}). – {EL}.",
+    "wang2020": f"Hardhat-Wearing Detection Based on a Lightweight Convolutional Neural Network with Multi-Scale Features and a Top-Down Module / L. Wang [et al.] // Sensors. – 2020. – Vol. 20, № 7. – Art. 1868. – DOI: 10.3390/s20071868. – URL: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7180748/ ({D}). – {EL}.",
     # CHECK: полный список авторов и выходные данные
-    "wojcik": f"Wójcik B. et al. A deep learning method for hard-hat-wearing detection based on head center localization // Bulletin of the Polish Academy of Sciences: Technical Sciences. – 2023. – URL: https://iitis.pl/en/node/3630 ({D}). – {EL}.",
-    "sh17": f"Ahmad H. M., Rahimi A. SH17: A dataset for human safety and personal protective equipment detection in manufacturing industry // Journal of Safety Science and Resilience. – 2025. – Vol. 6, № 2. – P. 175–185. – DOI: 10.1016/j.jnlssr.2024.09.002. – URL: https://arxiv.org/abs/2407.04590 ({D}). – {EL}.",
+    "wojcik": f"A deep learning method for hard-hat-wearing detection based on head center localization / B. Wójcik [et al.] // Bulletin of the Polish Academy of Sciences: Technical Sciences. – 2023. – URL: https://iitis.pl/en/node/3630 ({D}). – {EL}.",
+    "sh17": f"Ahmad, H. M. SH17 : A dataset for human safety and personal protective equipment detection in manufacturing industry / H. M. Ahmad, A. Rahimi // Journal of Safety Science and Resilience. – 2025. – Vol. 6, № 2. – P. 175–185. – DOI: 10.1016/j.jnlssr.2024.09.002. – URL: https://arxiv.org/abs/2407.04590 ({D}). – {EL}.",
     # --- рынок ---
     "axxon_docs": f"Equipment detector VL (детектор СИЗ) : документация AxxonSoft. – URL: https://docs.axxonsoft.com/confluence/x/1h6NDw ({D}). – {EL}.",
     "axxon_co": f"AxxonSoft: About company : [сайт]. – URL: https://www.axxonsoft.com/company ({D}). – {EL}.",

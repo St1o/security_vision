@@ -2,7 +2,8 @@
 
 Рамка страницы и малый штамп берутся из колонтитула образца (группа фигур). Здесь рамка сохраняется,
 а штамп из группы заменяется большим: 8 строк по 5 мм, как в ведомости отчёта (слева подписи, справа
-обозначение, наименование, «Лит. / Лист / Листов» и организация).
+обозначение, наименование темы, «Лит. / Лист / Листов» и организация). Шрифт ячеек – Arial, курсив, обозначение работы – 20 пт
+(Правила оформления письменных работ, п. 5.1).
 """
 from __future__ import annotations
 
@@ -41,7 +42,7 @@ THICK, THIN = 25400, 12700
 @dataclass
 class StampData:
     designation: str = "ПП.990000.000 ПЗ"
-    title: str = "Отчет по практической подготовке при проведении производственной практики"
+    title: str = "Система компьютерного зрения для мониторинга средств индивидуальной защиты"
     developer: str = "Гридасов А.Ю."
     supervisor: str = "Сафарьян О. А."
     controller: str = ""
@@ -77,7 +78,7 @@ def _line(ids: _Ids, x1, y1, x2, y2, width) -> str:
 
 def _run(text: str, size_hp: int, italic: bool = True) -> str:
     rpr = (
-        '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>'
+        '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'
         f'{"<w:i/>" if italic else ""}<w:sz w:val="{size_hp}"/><w:szCs w:val="{size_hp}"/></w:rPr>'
     )
     return f"<w:r>{rpr}<w:t xml:space=\"preserve\">{_esc(text)}</w:t></w:r>"
@@ -85,7 +86,7 @@ def _run(text: str, size_hp: int, italic: bool = True) -> str:
 
 def _page_field(size_hp: int, cached: str) -> str:
     rpr = (
-        '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>'
+        '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'
         f'<w:i/><w:sz w:val="{size_hp}"/><w:szCs w:val="{size_hp}"/></w:rPr>'
     )
     return (
@@ -161,7 +162,7 @@ def stamp_shapes(data: StampData) -> list[etree._Element]:
     # Лит. / Лист / Листов
     for (a, b), text in zip(((X_TITLE_R, X_LIT), (X_LIT, X_LIST), (X_LIST, xr)), ("Лит.", "Лист", "Листов")):
         B(a, y(2), b, y(3), cell(text))
-    B(X_LIT, y(3), X_LIST, y(4), [_par(_page_field(20, str(data.first_page)), "center")])
+    B(X_LIT, y(3), X_LIST, y(4), [_par(_page_field(20, str(data.first_page)), "right")])  # номер страницы – по правому краю
     B(X_LIST, y(3), xr, y(4), cell(str(data.sheets_total or ""), 20))
     # организация
     B(X_TITLE_R, y(4), xr, y(8), [_par(_run(line, 26), "center") for line in data.organisation])

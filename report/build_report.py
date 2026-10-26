@@ -33,9 +33,15 @@ from sources import SOURCES  # noqa: E402
 from stamp import StampData, build_toc_footer  # noqa: E402
 
 FONT = "Times New Roman"
-BODY_SZ = 28          # 14 пт
+BODY_SZ = 28          # 14 пт: основной текст, заголовки подразделов
+HEAD_SZ = 32          # 16 пт: структурные элементы и заголовки разделов (Правила, п. 5.1)
 TABLE_SZ = 24         # 12 пт
-LISTING_SZ = 18       # 9 пт
+LISTING_SZ = 24       # 12 пт, Courier New (Правила, п. 9.4)
+NBSP = "\u00a0"
+HEAD_GAP = 480        # два межстрочных интервала основного текста до и после заголовка
+MARGIN_TOP = 850      # 15 мм: от верхней рамки до первой строки не менее 10 мм
+MARGIN_BOTTOM = 1700  # 30 мм: от малого штампа до последней строки не менее 10 мм
+MARGIN_BOTTOM_TOC = 3120  # 55 мм: то же для большого штампа
 DESIGNATION = "ПП.990000.000 ПЗ"
 
 
@@ -87,6 +93,9 @@ def parse_content(files: list[Path]) -> list[Block]:
             elif line.startswith("{listing "):
                 parts = [p.strip() for p in line.strip("{}").split(" | ")]
                 blocks.append(Block("listing", parts[1], file=parts[0].split("file=")[1].strip()))
+            elif line.startswith("{formula "):
+                head, body = line[len("{formula "):-1].split(" | ", 1)   # в формуле допускаются свои фигурные скобки: ^{N}
+                blocks.append(Block("formula", body.strip(), key=head.strip()))
             elif line.startswith("{center "):
                 blocks.append(Block("center", line[8:].rstrip("}").strip()))
             elif line.strip() == "{signature}":
@@ -97,12 +106,14 @@ def parse_content(files: list[Path]) -> list[Block]:
 
 
 def number_things(blocks: list[Block]):
-    figs, tabs, cites = {}, {}, {}
+    figs, tabs, cites, eqs = {}, {}, {}, {}
     for b in blocks:
         if b.kind == "figure":
             figs[b.kw["key"]] = len(figs) + 1
         elif b.kind == "table":
             tabs[b.kw["key"]] = len(tabs) + 1
+        elif b.kind == "formula":
+            eqs[b.kw["key"]] = len(eqs) + 1
 
     def scan(text):
         for m in re.finditer(r"\[((?:@\w+\s*)+)\]", text):
@@ -116,10 +127,11 @@ def number_things(blocks: list[Block]):
         for row in b.kw.get("rows", []):
             for cell in row:
                 scan(cell)
-    return figs, tabs, cites
+    return figs, tabs, cites, eqs
 
 
-def resolve(text: str, figs, tabs, cites) -> str:
+def resolve(text: str, figs, tabs, cites, eqs=None) -> str:
+    text = re.sub(r"@eq:(\w+)", lambda m: str((eqs or {})[m.group(1)]), text)
     text = re.sub(r"@fig:(\w+)", lambda m: str(figs[m.group(1)]), text)
     text = re.sub(r"@tab:(\w+)", lambda m: str(tabs[m.group(1)]), text)
 
@@ -147,7 +159,7 @@ def set_run_fmt(run, size, bold=False, font=FONT, highlight=False, italic=False)
         rpr.insert(0, rfonts)
     for a in ("ascii", "hAnsi", "cs", "eastAsia"):
         rfonts.set(qn("w:" + a), font)
-    for tag in ("w:b", "w:bCs", "w:i", "w:sz", "w:szCs", "w:highlight"):
+    for tag in ("w:b", "w:bCs", "w:i", "w:iCs", "w:sz", "w:szCs", "w:highlight"):
         for old in rpr.findall(qn(tag)):
             rpr.remove(old)
     if bold:
@@ -155,14 +167,39 @@ def set_run_fmt(run, size, bold=False, font=FONT, highlight=False, italic=False)
         rpr.append(_el("w:bCs"))
     if italic:
         rpr.append(_el("w:i"))
+    else:
+        rpr.append(_el("w:i", w_val=0))      # стиль заголовков образца курсивный, а по Правилам он обычный
+        rpr.append(_el("w:iCs", w_val=0))
     rpr.append(_el("w:sz", w_val=size))
     rpr.append(_el("w:szCs", w_val=size))
     if highlight:
         rpr.append(_el("w:highlight", w_val="yellow"))
 
 
-def add_runs(par, text: str, size: int, bold=False, font=FONT):
+UNITS = r"(?:%|мс|с|мин|ч|мм|см|км|м|кг|Гц|кГц|МГц|ГГц|кБ|МБ|ГБ|Б|пикселей|пикс\.)"
+COUNTED = r"(?:кадр\w*|секунд\w*|минут\w*|эпох\w*|изображени\w*|человек\w*|класс\w*|пиксел\w*|объект\w*|прогон\w*)"
+LIBS = r"Ultralytics|OpenCV|PySide6|SQLite|python-docx|pytest|NumPy|OpenVINO|PyTorch"
+# курсивом выделяются имена библиотек, файлов, переменных и параметров (Правила, п. 9.5)
+ITALIC_RE = re.compile(
+    r"(\b[\w-]+(?:/[\w.-]+)*\.(?:py|json|ipynb|md|db|docx|txt|ini|pt)\b"
+    r"|\b[a-z]+(?:_[a-z0-9]+)+\b"
+    r"|\b(?:rules|model|tracker)\.[a-z_]+\b"
+    r"|\b(?:" + LIBS + r")\b)")
+
+
+def typography(text: str) -> str:
+    """Неразрывные пробелы: число не отрывается от единицы величины, номер от знака № и т. п. (Правила, п. 5.6.2)."""
+    text = re.sub(r"(\d) (?=" + UNITS + r"(?![\wа-яёА-ЯЁ]))", r"\1" + NBSP, text)
+    text = re.sub(r"(\d) (?=" + COUNTED + r")", r"\1" + NBSP, text)
+    text = re.sub(r"№ (?=\d)", "№" + NBSP, text)
+    text = re.sub(r"\b(ст|п|пп|С|Т|Vol|Art|P)\. (?=\d)", lambda m: m.group(1) + "." + NBSP, text)
+    text = re.sub(r"(\d) (?=гг?\.)", r"\1" + NBSP, text)
+    return text
+
+
+def add_runs(par, text: str, size: int, bold=False, font=FONT, italic_names=True):
     """Разбирает **жирный** и {{заглушки}} и добавляет прогоны в абзац."""
+    text = typography(text)
     for token in re.split(r"(\*\*.+?\*\*|\{\{.+?\}\})", text):
         if not token:
             continue
@@ -173,8 +210,12 @@ def add_runs(par, text: str, size: int, bold=False, font=FONT):
             r = par.add_run("[" + token[2:-2] + "]")
             set_run_fmt(r, size, bold=bold, font=font, highlight=True)
         else:
-            r = par.add_run(token)
-            set_run_fmt(r, size, bold=bold, font=font)
+            parts = ITALIC_RE.split(token) if (italic_names and not bold) else [token]
+            for k, piece in enumerate(parts):
+                if not piece:
+                    continue
+                r = par.add_run(piece)
+                set_run_fmt(r, size, bold=bold, font=font, italic=bool(k % 2))
 
 
 def ppr(par):
@@ -182,7 +223,8 @@ def ppr(par):
 
 
 def fmt_par(par, *, style_id=None, jc=None, first=None, left=None, line=360, before=0, after=0,
-            keep_next=False, page_break=False, no_num=False, contextual=False, keep_lines=False):
+            keep_next=False, page_break=False, no_num=False, contextual=False, keep_lines=False,
+            hanging=None, right=None):
     p = ppr(par)
     for child in list(p):
         p.remove(child)
@@ -205,6 +247,10 @@ def fmt_par(par, *, style_id=None, jc=None, first=None, left=None, line=360, bef
         ind["w_left"] = left
     if first is not None:
         ind["w_firstLine"] = first
+    if hanging is not None:
+        ind["w_hanging"] = hanging
+    if right is not None:
+        ind["w_right"] = right
     if ind:
         p.append(_el("w:ind", **ind))
     if contextual:
@@ -290,6 +336,15 @@ class Builder:
             body.remove(child)
         for old in sect_main.findall(qn("w:pgNumType")):
             sect_main.remove(old)
+        mar0 = sect_main.find(qn("w:pgMar"))
+        mar0.set(qn("w:top"), str(MARGIN_TOP))         # расстояние текста до рамки не менее 10 мм
+        mar0.set(qn("w:bottom"), str(MARGIN_BOTTOM))
+        for par_el in footer._element.iter(qn("w:p")):  # номер страницы в основной надписи выравнивается по правому краю
+            if any("PAGE" in (t.text or "") for t in par_el.iter(qn("w:instrText"))):
+                jc = par_el.find(qn("w:pPr")).find(qn("w:jc"))
+                if jc is not None:
+                    jc.set(qn("w:val"), "right")
+        self.after_heading = False
         pg = _el("w:pgNumType", w_start=start_page)
         # pgNumType должен идти после pgMar
         mar = sect_main.find(qn("w:pgMar"))
@@ -298,6 +353,10 @@ class Builder:
 
     # --- базовые абзацы
     def p(self, text, **kw):
+        self.after_heading = False
+        if text.startswith("~"):                 # абзац без абзацного отступа (пояснение к формуле: «где …»)
+            text = text[1:]
+            kw["fmt"] = dict(kw.get("fmt", {}), first=0)
         par = self.doc.add_paragraph()
         fmt = dict(jc="both", first=709, contextual=True)
         fmt.update(kw.pop("fmt", {}))
@@ -305,39 +364,59 @@ class Builder:
         add_runs(par, text, kw.get("size", BODY_SZ), bold=kw.get("bold", False))
         return par
 
-    def h0(self, text, toc=True):
+    def _heading_gap(self):
+        """Отступ перед заголовком: два интервала, если выше обычный текст, и ноль, если выше другой заголовок."""
+        return 0 if self.after_heading else HEAD_GAP
+
+    def h0(self, text, toc=True, subtitle=None):
+        """Структурный элемент (Введение, Заключение, Приложение…): с новой страницы, по центру, 16 пт, полужирный.
+        Для приложения subtitle – наименование: оно идёт с новой строки того же заголовка, чтобы в оглавление
+        попадало «Приложение А Наименование»."""
         par = self.doc.add_paragraph()
-        fmt_par(par, style_id=self.styles["heading 1"] if toc else None, jc="center", after=240, keep_next=True,
-                keep_lines=True, page_break=True, no_num=True)
-        add_runs(par, text, BODY_SZ, bold=True)
+        fmt_par(par, style_id=self.styles["heading 1"] if toc else None, jc="center", before=0, after=HEAD_GAP,
+                keep_next=True, keep_lines=True, page_break=True, no_num=True, line=240)
+        add_runs(par, text, HEAD_SZ, bold=True)
+        if subtitle:
+            par.add_run().add_break()
+            add_runs(par, subtitle, HEAD_SZ, bold=True)
         if toc:
-            self.headings.append((1, text))
+            self.headings.append((1, text + (" " + subtitle if subtitle else "")))
+        self.after_heading = True
 
     def h1(self, text):
+        """Заголовок раздела: с новой страницы, с абзацного отступа, 16 пт, полужирный."""
         par = self.doc.add_paragraph()
-        fmt_par(par, style_id=self.styles["heading 1"], jc="left", first=709, after=240, keep_next=True,
-                keep_lines=True, page_break=True, no_num=True)
-        add_runs(par, text, BODY_SZ, bold=True)
+        fmt_par(par, style_id=self.styles["heading 1"], jc="left", first=709, before=0, after=HEAD_GAP,
+                keep_next=True, keep_lines=True, page_break=True, no_num=True, line=240)
+        add_runs(par, text, HEAD_SZ, bold=True)
         self.headings.append((1, text))
+        self.after_heading = True
 
     def h2(self, text):
+        """Заголовок подраздела: 14 пт, полужирный; до и после два интервала основного текста."""
         par = self.doc.add_paragraph()
-        fmt_par(par, style_id=self.styles["heading 2"], jc="left", first=709, before=120, after=240,
-                keep_next=True, keep_lines=True, no_num=True)
+        fmt_par(par, style_id=self.styles["heading 2"], jc="left", first=709, before=self._heading_gap(),
+                after=HEAD_GAP, keep_next=True, keep_lines=True, no_num=True, line=240)
         add_runs(par, text, BODY_SZ, bold=True)
         self.headings.append((2, text))
+        self.after_heading = True
 
     def h3(self, text):
         par = self.doc.add_paragraph()
-        fmt_par(par, jc="left", first=709, before=240, after=120, keep_next=True, keep_lines=True)
+        fmt_par(par, jc="left", first=709, before=self._heading_gap(), after=HEAD_GAP, keep_next=True,
+                keep_lines=True, line=240)
         add_runs(par, text, BODY_SZ, bold=True)
+        self.after_heading = True
 
     def center(self, text):
+        """Наименование приложения под обозначением «Приложение А»: по центру, 16 пт, полужирный."""
         par = self.doc.add_paragraph()
-        fmt_par(par, jc="center", after=240, keep_next=True)
-        add_runs(par, text, BODY_SZ, bold=True)
+        fmt_par(par, jc="center", after=HEAD_GAP, keep_next=True, line=240)
+        add_runs(par, text, HEAD_SZ, bold=True)
+        self.after_heading = True
 
     def bullet(self, text):
+        self.after_heading = False
         par = self.doc.add_paragraph()
         fmt_par(par, jc="both", left=1134, contextual=True)
         pr = ppr(par)
@@ -360,10 +439,39 @@ class Builder:
         fmt_par(par2, jc="right", first=0, left=0)
         add_runs(par2, "(подпись)          ", 20)
 
+    def formula(self, number, text, resolve_fn):
+        """Формула по центру, номер справа в круглых скобках (Правила, п. 5.6.3); переменные курсивом."""
+        self.after_heading = False
+        par = self.doc.add_paragraph()
+        fmt_par(par, jc=None, first=0, before=120, after=120, line=360, keep_next=True)
+        tabs = _el("w:tabs")
+        tabs.append(_el("w:tab", w_val="center", w_pos=4819))
+        tabs.append(_el("w:tab", w_val="right", w_pos=9638))
+        ppr(par).append(tabs)
+        par.add_run("\t")
+        for i, chunk in enumerate(re.split(r"(\^\{.+?\}|_\{.+?\})", resolve_fn(text))):
+            if not chunk:
+                continue
+            sup, sub_ = chunk.startswith("^{"), chunk.startswith("_{")
+            body = chunk[2:-1] if (sup or sub_) else chunk
+            for piece in re.split(r"([A-Za-zА-Яа-я]+)", body):
+                if not piece:
+                    continue
+                r = par.add_run(piece)
+                set_run_fmt(r, BODY_SZ, italic=bool(re.fullmatch(r"[A-Za-zА-Яа-я]+", piece)))
+                if sup:
+                    r.font.superscript = True
+                if sub_:
+                    r.font.subscript = True
+        r = par.add_run(f"\t({number})")
+        set_run_fmt(r, BODY_SZ)
+
     # --- таблицы, рисунки, листинги
     def table(self, number, caption, rows, widths, resolve_fn):
+        self.after_heading = False
         cap = self.doc.add_paragraph()
-        fmt_par(cap, jc="left", first=0, before=120, after=60, keep_next=True, line=360)
+        # название таблицы: слева, без абзацного отступа, через одинарный интервал (Правила, п. 5.6.5)
+        fmt_par(cap, jc="left", first=0, before=120, after=60, keep_next=True, line=240)
         add_runs(cap, f"Таблица {number} – {caption}", BODY_SZ)
         ncols = len(rows[0])
         t = self.doc.add_table(rows=len(rows), cols=ncols)
@@ -376,6 +484,7 @@ class Builder:
             tr = t.rows[ri]
             trpr = tr._tr.get_or_add_trPr()
             trpr.append(_el("w:cantSplit"))
+            trpr.append(_el("w:trHeight", w_val=454, w_hRule="atLeast"))   # высота строк не менее 8 мм
             if ri == 0:
                 trpr.append(_el("w:tblHeader"))
             for ci in range(ncols):
@@ -394,6 +503,7 @@ class Builder:
         fmt_par(after, first=0, line=240, after=120)
 
     def figure(self, number, caption, file, width_cm, hint):
+        self.after_heading = False
         path = next((p for p in (HERE / "inputs" / file, HERE / "figures" / file) if p.exists()), None)
         if path:
             par = self.doc.add_paragraph()
@@ -417,12 +527,13 @@ class Builder:
             gap = self.doc.add_paragraph()
             fmt_par(gap, first=0, line=120, keep_next=True)
         cap = self.doc.add_paragraph()
-        fmt_par(cap, jc="center", first=0, after=240, line=360)
+        fmt_par(cap, jc="center", first=0, after=240, line=240)     # подпись по центру, при нескольких строках – одинарный интервал
         add_runs(cap, f"Рисунок {number} – {caption}", BODY_SZ)
 
     def listing(self, caption, relpath):
+        self.after_heading = False
         title = self.doc.add_paragraph()
-        fmt_par(title, jc="left", first=709, before=120, after=120, keep_next=True, line=360)
+        fmt_par(title, jc="left", first=0, before=120, after=120, keep_next=True, line=240)   # слева, без абзацного отступа
         add_runs(title, caption, BODY_SZ)
         for raw in (ROOT / relpath).read_text(encoding="utf-8").expandtabs(4).splitlines():
             par = self.doc.add_paragraph()
@@ -445,9 +556,16 @@ class Builder:
         for idx, (lvl, text) in enumerate(entries):
             par = self.doc.add_paragraph()
             style = self.styles.get("toc 1" if lvl == 1 else "toc 2")
-            fmt_par(par, style_id=style, jc="left", first=0, left=0 if lvl == 1 else 567, line=276)
-            ppr(par).append(_el("w:tabs"))
-            ppr(par).find(qn("w:tabs")).append(_el("w:tab", w_val="right", w_leader="dot", w_pos=9500))
+            m = re.match(r"^(\d+(?:\.\d+)*)\s+(.*)$", text)
+            base = 0 if lvl == 1 else 567          # номера подразделов смещены на два знака относительно номера раздела
+            hang = (567 if lvl == 1 else 850) if m else 0   # продолжение заголовка начинается на уровне его первой строки
+            fmt_par(par, style_id=style, jc="left", first=0 if not hang else None, left=base + hang,
+                    hanging=hang or None, line=276, right=0)
+            tabs = _el("w:tabs")
+            if hang:
+                tabs.append(_el("w:tab", w_val="left", w_pos=base + hang))
+            tabs.append(_el("w:tab", w_val="right", w_leader="dot", w_pos=9638))
+            ppr(par).append(tabs)
             if first:  # начало поля оглавления
                 r = par.add_run()
                 r._r.append(_el("w:fldChar", w_fldCharType="begin"))
@@ -460,9 +578,9 @@ class Builder:
                 r3._r.append(_el("w:fldChar", w_fldCharType="separate"))
                 first = False
             page = self.toc_pages.get(text, "")
-            add_runs(par, text, BODY_SZ if lvl == 1 else 26)
+            add_runs(par, (m.group(1) + "\t" + m.group(2)) if hang else text, BODY_SZ, italic_names=False)
             r = par.add_run("\t" + (str(page) if page != "" else ""))
-            set_run_fmt(r, BODY_SZ if lvl == 1 else 26)
+            set_run_fmt(r, BODY_SZ)
             if idx == len(entries) - 1:
                 r = par.add_run()
                 r._r.append(_el("w:fldChar", w_fldCharType="end"))
@@ -478,7 +596,7 @@ class Builder:
         for old in sect_body.findall(qn("w:pgNumType")):  # нумерация продолжается
             sect_body.remove(old)
         mar = sect_toc.find(qn("w:pgMar"))
-        mar.set(qn("w:bottom"), "2650")                   # место под штамп высотой 40 мм
+        mar.set(qn("w:bottom"), str(MARGIN_BOTTOM_TOC))   # место под штамп высотой 40 мм и зазор 10 мм до текста
         source = doc.sections[1].footer
         target = doc.sections[0].footer
         target.is_linked_to_previous = False
@@ -489,18 +607,20 @@ class Builder:
 def build(template: Path, out: Path, start_page: int, toc_pages: dict | None, designation: str, total_sheets: int = 0):
     files = sorted((HERE / "content").glob("*.md"))
     blocks = parse_content(files)
-    figs, tabs, cites = number_things(blocks)
-    res = lambda s: resolve(s, figs, tabs, cites)  # noqa: E731
+    figs, tabs, cites, eqs = number_things(blocks)
+    res = lambda s: resolve(s, figs, tabs, cites, eqs)  # noqa: E731
 
     b = Builder(template, designation, start_page, toc_pages, total_sheets)
     b.toc_entries = [(1, "Введение")]
-    for blk in blocks:
+    for n, blk in enumerate(blocks):
         if blk.kind == "h1":
             b.toc_entries.append((1, blk.text))
         elif blk.kind == "h2":
             b.toc_entries.append((2, blk.text))
         elif blk.kind == "h0" and blk.text != "Введение":
-            b.toc_entries.append((1, blk.text))
+            nxt = blocks[n + 1] if n + 1 < len(blocks) else None
+            title = blk.text + (" " + nxt.text if blk.text.startswith("Приложение") and nxt and nxt.kind == "center" else "")
+            b.toc_entries.append((1, title))
     # перечень ресурсов вставляется перед приложениями
     sources_title = "Перечень использованных информационных ресурсов"
     idx_app = next(i for i, e in enumerate(b.toc_entries) if e[1].startswith("Приложение"))
@@ -509,13 +629,23 @@ def build(template: Path, out: Path, start_page: int, toc_pages: dict | None, de
     b.toc()
     b.end_toc_section()
     sources_done = False
-    for blk in blocks:
+    skip_next = False
+    for n, blk in enumerate(blocks):
+        if skip_next:                      # наименование приложения уже выведено в заголовке
+            skip_next = False
+            continue
         if blk.kind == "h0" and blk.text.startswith("Приложение") and not sources_done:
             b.h0(sources_title)
             b.sources_list(cites)
             sources_done = True
         k = blk.kind
-        if k == "h0":
+        nxt = blocks[n + 1] if n + 1 < len(blocks) else None
+        if k == "h0" and blk.text.startswith("Приложение") and nxt is not None and nxt.kind == "center":
+            b.h0(blk.text, subtitle=nxt.text)
+            skip_next = True
+        elif k == "formula":
+            b.formula(eqs[blk.kw["key"]], blk.text, res)
+        elif k == "h0":
             b.h0(blk.text)
         elif k == "h1":
             b.h1(blk.text)

@@ -166,6 +166,10 @@ def fig_window():
             ax.text(5, 0.5, "нарушение не фиксируется", fontsize=9, ha="center", va="center",
                     bbox=dict(boxstyle="round", fc="white", ec=DARK))
     axes[1].set_xlabel("время, с")
+    for ax in axes:   # оси заканчиваются стрелками, показывающими рост значений (Правила, п. 5.6.4)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.plot(1, 0, ">k", transform=ax.get_yaxis_transform(), clip_on=False, ms=7)
+        ax.plot(0, 1, "^k", transform=ax.get_xaxis_transform(), clip_on=False, ms=7)
     fig.tight_layout()
     fig.savefig(OUT / "fig_window.png", dpi=200)
     plt.close(fig)
