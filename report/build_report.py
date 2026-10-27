@@ -416,17 +416,11 @@ class Builder:
         self.after_heading = True
 
     def bullet(self, text):
+        """Перечень: тире и абзацный отступ, строки продолжаются от левого края, как основной текст."""
         self.after_heading = False
         par = self.doc.add_paragraph()
-        fmt_par(par, jc="both", left=1134, contextual=True)
-        pr = ppr(par)
-        num = _el("w:numPr")
-        num.append(_el("w:ilvl", w_val=0))
-        num.append(_el("w:numId", w_val=9))
-        pr.insert(0, num)
-        pr.insert(1, _el("w:tabs"))
-        pr.find(qn("w:tabs")).append(_el("w:tab", w_val="left", w_pos=993))
-        add_runs(par, text, BODY_SZ)
+        fmt_par(par, jc="both", first=709, contextual=True)
+        add_runs(par, "–" + NBSP + text, BODY_SZ)
 
     def signature(self):
         prev = self.doc.paragraphs[-1]
@@ -558,12 +552,11 @@ class Builder:
             style = self.styles.get("toc 1" if lvl == 1 else "toc 2")
             m = re.match(r"^(\d+(?:\.\d+)*)\s+(.*)$", text)
             base = 0 if lvl == 1 else 567          # номера подразделов смещены на два знака относительно номера раздела
-            hang = (567 if lvl == 1 else 850) if m else 0   # продолжение заголовка начинается на уровне его первой строки
+            # после номера стоит пробел; продолжение длинного заголовка начинается на уровне его первой строки
+            hang = (210 if lvl == 1 else 420) if m else 0     # ширина «1 » и «1.1 » при 14 пт
             fmt_par(par, style_id=style, jc="left", first=0 if not hang else None, left=base + hang,
                     hanging=hang or None, line=276, right=0)
             tabs = _el("w:tabs")
-            if hang:
-                tabs.append(_el("w:tab", w_val="left", w_pos=base + hang))
             tabs.append(_el("w:tab", w_val="right", w_leader="dot", w_pos=9638))
             ppr(par).append(tabs)
             if first:  # начало поля оглавления
@@ -578,7 +571,7 @@ class Builder:
                 r3._r.append(_el("w:fldChar", w_fldCharType="separate"))
                 first = False
             page = self.toc_pages.get(text, "")
-            add_runs(par, (m.group(1) + "\t" + m.group(2)) if hang else text, BODY_SZ, italic_names=False)
+            add_runs(par, (m.group(1) + " " + m.group(2)) if hang else text, BODY_SZ, italic_names=False)
             r = par.add_run("\t" + (str(page) if page != "" else ""))
             set_run_fmt(r, BODY_SZ)
             if idx == len(entries) - 1:
