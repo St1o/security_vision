@@ -47,7 +47,7 @@ class StampData:
     supervisor: str = "Сафарьян О. А."
     controller: str = ""
     approver: str = "Сафарьян О. А."
-    organisation: tuple[str, ...] = ("ДГТУ", "Группа ВКБ32")
+    organisation: tuple[str, ...] = ("ДГТУ", "Группа ВКБ52")
     sheets_total: int = 0
     first_page: int = 7
 
