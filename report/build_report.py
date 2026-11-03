@@ -39,9 +39,10 @@ TABLE_SZ = 24         # 12 пт
 LISTING_SZ = 24       # 12 пт, Courier New (Правила, п. 9.4)
 NBSP = "\u00a0"
 HEAD_GAP = 480        # два межстрочных интервала основного текста до и после заголовка
-MARGIN_TOP = 850      # 15 мм: от верхней рамки до первой строки не менее 10 мм
-MARGIN_BOTTOM = 1700  # 30 мм: от малого штампа до последней строки не менее 10 мм
-MARGIN_BOTTOM_TOC = 3120  # 55 мм: то же для большого штампа
+MARGIN_TOP = 970      # 17 мм: от верхней рамки (7 мм от края листа) до первой строки не менее 10 мм
+FRAME_SCALE = 0.98    # рамка и штамп уменьшены на 2 % внутрь, чтобы помещаться в область печати
+MARGIN_BOTTOM = 1850  # 33 мм: от малого штампа до последней строки не менее 10 мм
+MARGIN_BOTTOM_TOC = 3250  # 57 мм: то же для большого штампа
 DESIGNATION = "ПП.990000.000 ПЗ"
 
 
@@ -313,6 +314,29 @@ def normalize(doc):
             _sort_children(el, order)
 
 
+def shrink_frame(footer_el, scale: float = None):
+    """Уменьшает рамку и штамп (группу фигур колонтитула) к центру листа: иначе рамка выходит за область печати."""
+    scale = scale or FRAME_SCALE
+    ns = {"wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+          "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+          "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006"}
+    for anchor in footer_el.iterfind(".//wp:anchor", ns):
+        ext = anchor.find("wp:extent", ns)
+        cx, cy = int(ext.get("cx")), int(ext.get("cy"))
+        ncx, ncy = round(cx * scale), round(cy * scale)
+        ext.set("cx", str(ncx))
+        ext.set("cy", str(ncy))
+        pos_h = anchor.find("wp:positionH/wp:posOffset", ns)
+        pos_v = anchor.find("wp:positionV/wp:posOffset", ns)
+        pos_h.text = str(int(pos_h.text) + (cx - ncx) // 2)     # равномерно со всех сторон
+        pos_v.text = str(int(pos_v.text) + (cy - ncy) // 2)
+        for xfrm in anchor.iterfind(".//a:xfrm", ns):
+            e = xfrm.find("a:ext", ns)
+            if e is not None and e.get("cx") == str(cx) and e.get("cy") == str(cy):   # внешний размер группы
+                e.set("cx", str(ncx))
+                e.set("cy", str(ncy))
+
+
 # ---------------------------------------------------------------- сборщик ---------------------
 
 class Builder:
@@ -344,6 +368,7 @@ class Builder:
                 jc = par_el.find(qn("w:pPr")).find(qn("w:jc"))
                 if jc is not None:
                     jc.set(qn("w:val"), "right")
+        shrink_frame(footer._element)
         self.after_heading = False
         pg = _el("w:pgNumType", w_start=start_page)
         # pgNumType должен идти после pgMar
@@ -485,10 +510,11 @@ class Builder:
                 cell = tr.cells[ci]
                 cell.width = Cm(widths[ci])
                 par = cell.paragraphs[0]
-                keep = len(rows) <= 12 and ri < len(rows) - 1   # небольшая таблица не разрывается по страницам
+                # небольшая таблица не разрывается; у длинной головка остаётся с первой строкой, остальное переносится
+                keep = ri < len(rows) - 1 if len(rows) <= 4 else ri == 0
                 fmt_par(par, jc="center" if ri == 0 else "left", first=0, line=240, keep_next=keep)
                 text = resolve_fn(row[ci] if ci < len(row) else "")
-                add_runs(par, text, TABLE_SZ, bold=(ri == 0))
+                add_runs(par, text, TABLE_SZ, bold=False)      # головка таблицы обычным шрифтом (замечание руководителя)
                 tcpr = cell._tc.get_or_add_tcPr()
                 tcpr.append(_el("w:vAlign", w_val="center"))
                 if ri == 0:
@@ -555,7 +581,7 @@ class Builder:
             # после номера стоит пробел; продолжение длинного заголовка начинается на уровне его первой строки
             hang = (210 if lvl == 1 else 420) if m else 0     # ширина «1 » и «1.1 » при 14 пт
             fmt_par(par, style_id=style, jc="left", first=0 if not hang else None, left=base + hang,
-                    hanging=hang or None, line=276, right=0)
+                    hanging=hang or None, line=240, right=0)
             tabs = _el("w:tabs")
             tabs.append(_el("w:tab", w_val="right", w_leader="dot", w_pos=9638))
             ppr(par).append(tabs)
