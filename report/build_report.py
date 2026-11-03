@@ -626,6 +626,9 @@ class Builder:
 def build(template: Path, out: Path, start_page: int, toc_pages: dict | None, designation: str, total_sheets: int = 0):
     files = sorted((HERE / "content").glob("*.md"))
     blocks = parse_content(files)
+    for prev, nxt in zip(blocks, blocks[1:]):   # Правила (замечание руководителя): перед заголовком должен идти текст
+        if prev.kind in ("figure", "table", "listing", "formula") and nxt.kind in ("h0", "h1", "h2", "h3", "center"):
+            raise ValueError(f"Перед заголовком «{nxt.text[:50]}» стоит {prev.kind}, а не текст")
     figs, tabs, cites, eqs = number_things(blocks)
     res = lambda s: resolve(s, figs, tabs, cites, eqs)  # noqa: E731
 
